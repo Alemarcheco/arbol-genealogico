@@ -25,53 +25,66 @@ struct PerfilView: View {
     }
 
     func contenido(_ p: Persona) -> some View {
+        conHojas(lista(p), p)
+    }
+
+    func lista(_ p: Persona) -> some View {
         List {
             cabecera(p)
             eventos(p)
             familia(p)
             fotos(p)
-            if !p.notas.isEmpty || !arbol.notasVinculadas(p).isEmpty {
-                Section("Notas") {
-                    if !p.notas.isEmpty { Text(p.notas).textSelection(.enabled) }
-                    ForEach(Array(arbol.notasVinculadas(p).enumerated()), id: \.offset) { Text($0.element).textSelection(.enabled) }
-                }
-            }
-            if !p.correo.isEmpty {
-                Section("Contacto") {
-                    Link(destination: URL(string: "mailto:\(p.correo)") ?? URL(string: "mailto:")!) {
-                        Label(p.correo, systemImage: "envelope")
-                    }
-                }
-            }
-            if !p.extra.isEmpty || !p.otrosNombres.isEmpty {
-                Section {
-                    DisclosureGroup("Datos adicionales del archivo (\(p.extra.count + p.otrosNombres.count))") {
-                        ForEach(Array((p.otrosNombres + p.extra).enumerated()), id: \.offset) { _, n in
-                            NodoCrudoView(nodo: n)
-                        }
-                    }
-                } footer: {
-                    Text("Información del GEDCOM original (p. ej. etiquetas de MyHeritage). Se conserva al exportar.")
-                }
-            }
-            Section {
-                if arbol.datos.raiz != p.id {
-                    Button { arbol.datos.raiz = p.id; arbol.cambiado() } label: {
-                        Label("Usar como persona de inicio del árbol", systemImage: "house")
-                    }
-                } else {
-                    Label("Persona de inicio del árbol", systemImage: "house.fill").foregroundStyle(.secondary)
-                }
-                Button(role: .destructive) { confirmarBorrado = true } label: {
-                    Label("Eliminar persona", systemImage: "trash")
-                }
-            }
+            otras(p)
         }
         .navigationTitle(p.nombreCorto)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { Button("Editar") { editar = true } }
         }
+    }
+
+    @ViewBuilder
+    func otras(_ p: Persona) -> some View {
+        if !p.notas.isEmpty || !arbol.notasVinculadas(p).isEmpty {
+            Section("Notas") {
+                if !p.notas.isEmpty { Text(p.notas).textSelection(.enabled) }
+                ForEach(Array(arbol.notasVinculadas(p).enumerated()), id: \.offset) { Text($0.element).textSelection(.enabled) }
+            }
+        }
+        if !p.correo.isEmpty {
+            Section("Contacto") {
+                Link(destination: URL(string: "mailto:\(p.correo)") ?? URL(string: "mailto:")!) {
+                    Label(p.correo, systemImage: "envelope")
+                }
+            }
+        }
+        if !p.extra.isEmpty || !p.otrosNombres.isEmpty {
+            Section {
+                DisclosureGroup("Datos adicionales del archivo (\(p.extra.count + p.otrosNombres.count))") {
+                    ForEach(Array((p.otrosNombres + p.extra).enumerated()), id: \.offset) { _, n in
+                        NodoCrudoView(nodo: n)
+                    }
+                }
+            } footer: {
+                Text("Información del GEDCOM original (p. ej. etiquetas de MyHeritage). Se conserva al exportar.")
+            }
+        }
+        Section {
+            if arbol.datos.raiz != p.id {
+                Button { arbol.datos.raiz = p.id; arbol.cambiado() } label: {
+                    Label("Usar como persona de inicio del árbol", systemImage: "house")
+                }
+            } else {
+                Label("Persona de inicio del árbol", systemImage: "house.fill").foregroundStyle(.secondary)
+            }
+            Button(role: .destructive) { confirmarBorrado = true } label: {
+                Label("Eliminar persona", systemImage: "trash")
+            }
+        }
+    }
+
+    func conHojas(_ v: some View, _ p: Persona) -> some View {
+        conDialogos(v, p)
         .sheet(isPresented: $editar) { EditarPersonaView(original: p) }
         .sheet(item: $anadir) { a in NuevoFamiliarView(relacion: a.relacion, de: a.de) }
         .sheet(item: $eventoEditado) { ev in
@@ -87,6 +100,10 @@ struct PerfilView: View {
         .fullScreenCover(item: Binding(get: { visor.map { IDTexto(id: String($0)) } }, set: { visor = $0.flatMap { Int($0.id) } })) { v in
             VisorFotos(personaID: p.id, inicio: Int(v.id) ?? 0)
         }
+    }
+
+    func conDialogos(_ v: some View, _ p: Persona) -> some View {
+        v
         .confirmationDialog("¿Eliminar a \(p.nombreCompleto) del árbol?", isPresented: $confirmarBorrado, titleVisibility: .visible) {
             Button("Eliminar", role: .destructive) {
                 if !ruta.isEmpty { ruta.removeLast() }
@@ -175,18 +192,15 @@ struct PerfilView: View {
                 l.append(LineaVida(evento: n, titulo: t, editable: nil, anio: FechaGedcom.anio(n.fecha)))
             }
         }
-        return l.sorted { a, b in
-            let oa = TipoEvento.orden(a.evento.tipo), ob = TipoEvento.orden(b.evento.tipo)
-            if oa == 0 || ob == 0 || oa >= 90 || ob >= 90, oa != ob, a.editable != nil, b.editable != nil, a.editable?.familia == nil, b.editable?.familia == nil {
-                return oa < ob
+        func clave(_ x: LineaVida) -> (Int, Int) {
+            let o = TipoEvento.orden(x.evento.tipo)
+            if x.editable != nil && x.editable?.familia == nil {
+                if o == 0 { return (Int.min, o) }
+                if o >= 90 { return (Int.max, o) }
             }
-            switch (a.anio, b.anio) {
-            case let (x?, y?) where x != y: return x < y
-            case (_?, nil): return true
-            case (nil, _?): return false
-            default: return oa < ob
-            }
+            return (x.anio ?? (o < 50 ? Int.min + 1 : Int.max - 1), o)
         }
+        return l.sorted { clave($0) < clave($1) }
     }
 
     func eventos(_ p: Persona) -> some View {
