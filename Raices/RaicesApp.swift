@@ -14,6 +14,13 @@ struct RaicesApp: App {
             RaizView()
                 .environment(biblioteca)
                 .tint(Tema.verde)
+                .task {
+                    // Pruebas automáticas: -importarPrueba /ruta/al/archivo.ged
+                    let args = ProcessInfo.processInfo.arguments
+                    if let i = args.firstIndex(of: "-importarPrueba"), i + 1 < args.count {
+                        biblioteca.importar(url: URL(fileURLWithPath: args[i + 1]))
+                    }
+                }
                 .onOpenURL { url in
                     // "Abrir con Raíces" desde Archivos, Mail, WhatsApp...
                     biblioteca.importar(url: url)

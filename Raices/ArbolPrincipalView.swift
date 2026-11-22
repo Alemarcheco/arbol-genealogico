@@ -6,7 +6,7 @@ struct ArbolPrincipalView: View {
     @State private var rutaPersonas = NavigationPath()
     @State private var rutaParentesco = NavigationPath()
     @State private var rutaMas = NavigationPath()
-    @State private var pestana = 0
+    @State private var pestana = Int(UserDefaults.standard.string(forKey: "pestana") ?? "") ?? 0
 
     var body: some View {
         TabView(selection: $pestana) {

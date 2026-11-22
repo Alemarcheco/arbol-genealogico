@@ -1,0 +1,57 @@
+name: Prueba en simulador
+
+on:
+  push:
+    branches: ["claude/**"]
+  workflow_dispatch:
+
+jobs:
+  simulador:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar XcodeGen
+        run: brew install xcodegen
+
+      - name: Generar proyecto
+        run: xcodegen generate
+
+      - name: Compilar para simulador
+        run: |
+          xcodebuild -project Raices.xcodeproj -scheme Raices -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -5
+
+      - name: Abrir el árbol de ejemplo en el simulador
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          echo "Simulador: $UDID"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/Raices.app
+          mkdir -p capturas
+          for TAB in 0 1 2 3; do
+            xcrun simctl terminate "$UDID" com.alemarcheco.arbolgenealogico 2>/dev/null || true
+            ARGS="-pestana $TAB"
+            if [ "$TAB" = "0" ]; then ARGS="$ARGS -importarPrueba $PWD/Pruebas/ejemplo-myheritage.ged"; fi
+            echo "===== Pestaña $TAB ====="
+            ( xcrun simctl launch --console-pty --terminate-running-process "$UDID" com.alemarcheco.arbolgenealogico $ARGS > consola-$TAB.txt 2>&1 & )
+            sleep 25
+            xcrun simctl io "$UDID" screenshot capturas/pestana-$TAB.png || true
+            if xcrun simctl spawn "$UDID" launchctl list | grep -q arbolgenealogico; then echo "La app sigue abierta"; else echo "LA APP SE CERRÓ"; fi
+            grep -v "^$" consola-$TAB.txt | tail -40 || true
+          done
+
+      - name: Informes de fallo
+        if: always()
+        run: |
+          for f in $(ls -t ~/Library/Logs/DiagnosticReports/Raices* 2>/dev/null | head -2); do
+            echo "===== $f"; head -c 12000 "$f"; echo
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-simulador
+          path: capturas
