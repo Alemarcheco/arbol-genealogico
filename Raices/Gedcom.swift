@@ -226,6 +226,11 @@ enum ImportadorGedcom {
             switch n.tag {
             case "HEAD":
                 arbol.origen = n.valorDe("SOUR") ?? ""
+                // MyHeritage: "Exported by MyHeritage.com from Familia X Family Tree in ..."
+                if let f = n.valorDe("FILE"), let a = f.range(of: " from "), let b = f.range(of: " Family Tree", range: a.upperBound..<f.endIndex) {
+                    let t = String(f[a.upperBound..<b.lowerBound]).recortado
+                    if !t.isEmpty { arbol.nombre = "Familia " + t.replacingOccurrences(of: "Familia ", with: "") }
+                }
             case "TRLR":
                 break
             case "INDI":

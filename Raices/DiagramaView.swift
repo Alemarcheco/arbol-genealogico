@@ -59,7 +59,7 @@ struct DisposicionArbol {
 
         for g in 1...mostrar {
             for i in 0..<(1 << g) {
-                guard let hijo = gens[g - 1][i] else { continue }
+                guard let hijo = gens[g - 1][i / 2] else { continue }
                 let x = xAnc(g, i), y = -CGFloat(g) * H
                 if let pid = gens[g][i] {
                     var e = ElementoDiagrama(id: "a\(g)-\(i)", tipo: .persona(pid), x: x, y: y)
